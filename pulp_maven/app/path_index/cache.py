@@ -77,7 +77,7 @@ class ViewCache:
                 self.views[key] = [view, 0]
                 view = None
         except Exception:
-            log.debug("Path index view unavailable", exc_info=True)
+            log.warning("Path index view unavailable for key %s", key, exc_info=True)
         finally:
             if view is not None:
                 view.close()

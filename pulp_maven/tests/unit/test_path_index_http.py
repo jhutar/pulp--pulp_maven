@@ -69,7 +69,8 @@ def test_html_paths_stream_inline_with_cache_headers(path, backend, settings):
 
     async def exercise():
         async def handle(request):
-            response = indexed_response(distro, path)
+            response, reason = indexed_response(distro, path)
+            assert reason is None
             assert isinstance(response, IndexedArtifactResponse)
             return response
 

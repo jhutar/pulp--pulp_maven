@@ -485,9 +485,29 @@ class MavenDistribution(Distribution, AutoAddObjPermsMixin):
 
         from pulp_maven.app.path_index.content import indexed_response
 
-        response = indexed_response(self, path)
+        response, reason = indexed_response(self, path)
         if response is not None:
             return response
+        if reason:
+            # Surface why the path-index fast path was bypassed so production
+            # logs show whether the fallback query is expected. The miss tokens
+            # indicate recoverable fast-path failures (PULP-2082); the remaining
+            # reasons are by-design bypasses for this distribution.
+            if reason in ("no-index-descriptor", "view-load-pending-or-failed"):
+                logger.info(
+                    "Path index fast path miss for distribution %s (path %r): %s; "
+                    "falling back to repository version query",
+                    self.name,
+                    path,
+                    reason,
+                )
+            else:
+                logger.debug(
+                    "Path index fast path bypassed for distribution %s (path %r): %s",
+                    self.name,
+                    path,
+                    reason,
+                )
 
         # Resolve the live repository version for this distribution.
         if self.repository_version_id:

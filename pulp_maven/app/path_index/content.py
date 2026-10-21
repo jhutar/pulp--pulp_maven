@@ -83,18 +83,25 @@ def artifact(entry, domain):
 
 
 def indexed_response(distribution, path):
+    """Serve a path from the mmap'd path index when possible.
+
+    Returns a ``(response, reason)`` pair. ``response`` is an aiohttp response
+    when the fast path handled the request, otherwise ``None``. ``reason`` is a
+    short token explaining why the fast path was skipped (for fallback
+    diagnostics), or ``None`` when the fast path succeeded.
+    """
     if distribution.remote_id or distribution.checkpoint:
-        return None
+        return None, "remote-or-checkpoint-distribution"
     # Redirect guards implement a separate URL/signature contract.
     guard = distribution.content_guard
     if guard and guard.pulp_type == "core.content_redirect":
-        return None
+        return None, "redirect-content-guard"
     key = descriptor(distribution)
     if key is None:
-        return None
+        return None, "no-index-descriptor"
     with cache().lease(key) as view:
         if view is None:
-            return None
+            return None, "view-load-pending-or-failed"
         entry = view.lookup(path)
         if entry is None and path and not path.endswith("/") and view.lookup(path + "/"):
             raise web.HTTPMovedPermanently(path.rsplit("/", 1)[-1] + "/")
@@ -105,12 +112,15 @@ def indexed_response(distribution, path):
         )
         domain = get_domain()
         if not inline_html and domain.storage_class not in SUPPORTED_BACKENDS:
-            return None
-        return IndexedArtifactResponse(
-            artifact(entry, domain),
-            entry,
-            domain,
-            path,
-            Handler.response_headers(path, distribution),
-            inline_html=inline_html,
+            return None, "unsupported-storage-backend"
+        return (
+            IndexedArtifactResponse(
+                artifact(entry, domain),
+                entry,
+                domain,
+                path,
+                Handler.response_headers(path, distribution),
+                inline_html=inline_html,
+            ),
+            None,
         )
